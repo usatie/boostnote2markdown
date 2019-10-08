@@ -4,6 +4,7 @@ import json
 import cson
 import tkinter
 import tkinter.filedialog
+import datetime
 
 
 def convert_to_name(dir_key, conf):
@@ -15,7 +16,7 @@ def convert_to_name(dir_key, conf):
     :return: directory name
     """
 
-    return [meta['name'] for meta in conf['folders'] if meta['key'] == dir_key]
+    return [meta['name'] for meta in conf['folders'] if meta['key'] == dir_key][0]
 
 
 def sanitize(str_):
@@ -62,7 +63,8 @@ def extract_md_from_BoostNote():
 
     notes = os.path.join(boostnote, 'notes')
     for file in os.listdir(notes):
-        with open(os.path.join(notes, file)) as f:
+        file_path = os.path.join(notes, file)
+        with open(file_path) as f:
             note = cson.load(f)
 
             if note['type'] != 'MARKDOWN_NOTE':
@@ -73,12 +75,21 @@ def extract_md_from_BoostNote():
             folder = convert_to_name(key, conf)
             title = note['title']
             content = note['content']
+            
+            # Append tags to content as hash tags
+            tags = note['tags']
+            content += '\n'
+            content += ' '.join(['#' + tag for tag in tags])
 
             if note['isTrashed']:
                 folder = 'Trash'
 
         folder = sanitize(folder)
         title = sanitize(title)
+
+        # Append folder name to content as a hash tag
+        if folder != 'Default':
+            content += ' #' + folder
 
         output_dir = os.path.join(boostnote, 'markdown', folder)
         os.makedirs(output_dir, exist_ok=True)
@@ -87,6 +98,15 @@ def extract_md_from_BoostNote():
 
         with open(output_file, 'w') as f:
             f.write(content)
+
+        # Modify creation date to original file's creation date
+        stat = os.stat(file_path)
+        try:
+            t = stat.st_birthtime
+        except AttributeError:
+            t = stat.st_mtime
+        creation_date = datetime.datetime.fromtimestamp(t)
+        os.system('SetFile -d "{}" \'{}\''.format(creation_date.strftime('%m/%d/%Y %H:%M:%S'), output_file))
 
         cnt_success += 1
 
